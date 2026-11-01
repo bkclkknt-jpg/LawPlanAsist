@@ -14,7 +14,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def respond(self, send_body):
         path = urlsplit(self.path).path.rstrip("/") or "/"
-        if path in ("/", "/index.html", "/settings.css", "/settings.js", "/converter.css", "/converter.js"):
+        if path in ("/", "/index.html", "/settings.css", "/settings.js", "/converter.css", "/converter.js", "/legal-assistant.css", "/legal-assistant.js"):
             file_name = "index.html" if path == "/" else path.lstrip("/")
             data = (ROOT / file_name).read_bytes()
             self.send_response(200)
