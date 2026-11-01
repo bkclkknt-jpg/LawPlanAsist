@@ -1,39 +1,78 @@
 window.LPA_CLOUD_CONFIG={url:"https://yolhophfdlnsisgdehww.supabase.co",key:"sb_publishable_uKAgK5Tv510IqU_U16grXg_wA2-HhVu"};
-/* LawPlanAsist Cloud — demo-only authenticated per-account snapshots.
- * Browser storage remains the working local dataset; cloud push/pull requires explicit clicks.
- * No service keys; Supabase publishable key only; server-enforced RLS owns the records.
- */
+/* Auth gate and account settings. No UYAP/UETS or privileged tokens in client. */
 (() => {
- const $$=id=>document.getElementById(id),root=document.createElement('section');
- root.id='cloud';root.hidden=true;
- root.innerHTML=`<h1>Hesabım ve Bulut Eşitleme</h1><p class="muted">E-posta/şifre girişi, hesaba özel demo yedeği ve cihazlar arası elle eşitleme.</p>
- <div class="card" style="border-color:#966d43;background:#312820"><b>DEMO GÜVENLİK SINIRI:</b> Henüz gerçek müvekkil dosyası saklama, UYAP/UETS, uçtan uca şifreleme, otomatik senkronizasyon veya tam sistem güvenlik denetimi yapılmadı. Gerçek kişisel ve hukuki gizli verileri girmeyin.</div>
- <div class="card" id="lpAuth"><h3>E-posta ile Giriş</h3><div class="grid"><label>E-posta<input id="lpEmail" type="email" autocomplete="email" style="width:100%"></label><label>Şifre<input id="lpPassword" type="password" autocomplete="current-password" style="width:100%"></label></div><div class="row" style="margin-top:14px"><button class="btn" id="lpLogin">Giriş Yap</button><button class="btn sub" id="lpRegister">Hesap Oluştur</button><button class="btn sub" id="lpForgot">Şifremi Unuttum</button><button class="btn sub" id="lpResend">Doğrulama E-postasını Tekrar Gönder</button></div><p class="muted">Doğrulama e-postası gelmediyse Spam / Gereksiz klasörünü kontrol edin. Supabase projesinde özel SMTP ayarlanmamışsa e-postalar yalnızca önceden yetkilendirilmiş adreslere ulaşabilir. Şifrenizi paylaşmayın.</p></div>
- <div class="card" id="lpAccount" hidden><div class="row" style="justify-content:space-between"><div><h3>Hesabım</h3><p id="lpUserMail" class="muted"></p></div><button class="btn sub" id="lpLogout">Çıkış Yap</button></div><h3>Bulut Demo Yedekleri</h3><p class="muted">Dört ayrı kategori: dosyalar, işler, hukuk asistanı taslakları ve ayarlar. Yükleme/geri alma otomatik yapılmaz. Başka cihazda aynı hesapla giriş yapın ve “Buluttan Al” seçin.</p><div id="lpSyncRows"></div><div class="row" style="margin-top:14px"><button class="btn" id="lpPushAll">Tüm yerel demo verilerini buluta yedekle</button><button class="btn sub" id="lpPullAll">Tüm bulut yedeklerini cihaza getir</button></div><p class="muted">Buluttan alınan veriler bu cihazın mevcut kayıtlarını değiştirir. Önce JSON yedeği almanız önerilir.</p></div>
- <p id="lpCloudMessage" role="status" aria-live="polite" class="muted"></p>`;
- const main=document.querySelector('main'),print= document.getElementById('printArea');if(print)main.insertBefore(root,print);else main.append(root);
- const nav=document.querySelector('aside nav');if(nav){const button=document.createElement('button');button.dataset.page='cloud';button.textContent='☁ Hesabım / Bulut';nav.insertBefore(button,nav.querySelector('[data-page="cases"]')||null);button.onclick=()=>{if(typeof go==='function')go('cloud')}}
- const settingsNav=document.getElementById('settingsNav');if(settingsNav){const b=document.createElement('button');b.type='button';b.textContent='☁ Hesabım ve Bulut';b.onclick=()=>{if(typeof go==='function')go('cloud')};settingsNav.append(b)}
- const config=window.LPA_CLOUD_CONFIG;
- if(!config||!window.supabase?.createClient){$$('lpCloudMessage').textContent='Bulut kütüphanesi yüklenemedi. İnternet bağlantısını ve engelleyici uzantıları kontrol edin.';return}
- const client=window.supabase.createClient(config.url,config.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'lpa_demo_auth_session_v1'}});
- const cats=[['dossiers','Dosyalarım','lpa_demo_dossiers_v1'],['tasks','İşler','lawplan_demo_tasks_v3'],['drafts','Hukuk Asistanı Taslakları','lpa_legal_workspace_drafts_v1'],['preferences','Ayarlar','lpa_settings_v2']];
- const msg=t=>{$$('lpCloudMessage').textContent=t};
- let user=null,busy=false;
- async function run(work){if(busy)return;busy=true;$$('lpCloudMessage').textContent='İşlem yapılıyor…';document.querySelectorAll('#cloud button').forEach(b=>b.disabled=true);try{await work()}catch(e){msg('İşlem başarısız: '+String(e.message||e))}finally{busy=false;document.querySelectorAll('#cloud button').forEach(b=>b.disabled=false)}}
- function render(){const signed=!!user;$$('lpAuth').hidden=signed;$$('lpAccount').hidden=!signed;if(signed)$$('lpUserMail').textContent=user.email||'Hesap doğrulandı';$$('lpSyncRows').innerHTML=cats.map(([id,label,key])=>'<div class="row" style="border-top:1px solid #334a64;padding:13px 0;justify-content:space-between"><b>'+label+'</b><div class="row"><button class="btn sub" data-sync="push" data-cat="'+id+'">Buluta Yedekle</button><button class="btn sub" data-sync="pull" data-cat="'+id+'">Buluttan Al</button></div></div>').join('')}
- async function push(cat){if(!user)throw Error('Oturum açılmamış.');const cfg=cats.find(x=>x[0]===cat);if(!cfg)return;const raw=localStorage.getItem(cfg[2]);if(raw===null){msg(cfg[1]+': cihazda veri bulunamadı, boş yedek gönderilmedi.');return}let payload;try{payload=JSON.parse(raw)}catch(e){throw Error('Yerel JSON kaydı bozuk.')}if(JSON.stringify(payload).length>500000)throw Error('Bu kategori 500 KB sınırını aşıyor.');const {error}=await client.from('lawplanasist_demo_records').upsert({user_id:user.id,category:cat,payload,updated_at:new Date().toISOString()},{onConflict:'user_id,category'});if(error)throw error;msg(cfg[1]+' buluta kaydedildi. Hesabınızla giriş yaptığınız cihazdan alınabilir.')}
- async function pull(cat,skipConfirm=false){if(!user)throw Error('Oturum açılmamış.');const cfg=cats.find(x=>x[0]===cat);if(!cfg)return;if(!skipConfirm&&!confirm(cfg[1]+' için bu cihazdaki kayıtlar bulut yedeğiyle DEĞİŞTİRİLECEK. Devam edilsin mi?'))return;
- const {data,error}=await client.from('lawplanasist_demo_records').select('payload,updated_at').eq('category',cat).eq('user_id',user.id).maybeSingle();if(error)throw error;if(!data){msg(cfg[1]+': bulutta yedek yok.');return}const json=JSON.stringify(data.payload);if(json.length>500000)throw Error('Bulut kaydı yerel sınırı aşıyor.');localStorage.setItem(cfg[2],json);msg(cfg[1]+' bu cihaza alındı. Ekranları yenilemek için sayfa yeniden yüklenecek.');return true}
- $$('lpSyncRows').onclick=e=>{const b=e.target.closest('[data-sync]');if(!b)return;run(async()=>{if(b.dataset.sync==='push')await push(b.dataset.cat);else if(await pull(b.dataset.cat))location.reload()})};
- $$('lpPushAll').onclick=()=>{if(!confirm('Cihazdaki demo kayıtlarının mevcut bulut yedeklerini değiştirmesini onaylıyor musunuz?'))return;run(async()=>{let count=0;for(const [cat,label,key] of cats)if(localStorage.getItem(key)!==null){await push(cat);count++}msg(count+' kategori buluta yedeklendi.')})};
- $$('lpPullAll').onclick=()=>{if(!confirm('UYARI: Buluttaki bütün mevcut kategoriler bu cihazdaki kayıtlarla yer değiştirecek. Devam edilsin mi?'))return;run(async()=>{let count=0;for(const [cat] of cats)if(await pull(cat,true))count++;msg(count+' kategori geri alındı.');if(count)location.reload()})};
- $$('lpLogin').onclick=()=>run(async()=>{const email=$$('lpEmail').value.trim(),password=$$('lpPassword').value;if(!email||!password)throw Error('E-posta ve şifreyi girin.');const {error}=await client.auth.signInWithPassword({email,password});if(error)throw error;$$('lpPassword').value='';msg('Giriş başarılı.')});
- $$('lpRegister').onclick=()=>run(async()=>{const email=$$('lpEmail').value.trim(),password=$$('lpPassword').value;if(!email||password.length<10)throw Error('E-posta ve en az 10 karakterli şifre girin.');const {data,error}=await client.auth.signUp({email,password,options:{emailRedirectTo:location.origin+'/'}});if(error)throw error;$$('lpPassword').value='';msg(data.session?'Hesap açıldı, giriş yapıldı.':'Kayıt isteği işlendi; bu, e-postanın teslim edildiğini doğrulamaz. Gelen kutusu ve Spam klasörünü kontrol edin. Gönderim için Supabase özel SMTP yapılandırması gerekebilir.')});
- $('lpResend').onclick=()=>run(async()=>{const email=$('lpEmail').value.trim();if(!email||!email.includes('@'))throw Error('Önce geçerli e-posta adresinizi yazın.');const {error}=await client.auth.resend({type:'signup',email,options:{emailRedirectTo:location.origin+'/'}});if(error)throw error;msg('Doğrulama yeniden gönderme isteği kabul edildi; bu mesaj teslim edildiği anlamına gelmez. Gelen Kutusu, Spam ve Tanıtımlar klasörlerini kontrol edin. Supabase özel SMTP gerektirebilir.');});
- $('lpForgot').onclick=()=>run(async()=>{const email=$$('lpEmail').value.trim();if(!email)throw Error('E-posta girin.');const {error}=await client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/'});if(error)throw error;msg('E-posta adresi kayıtlıysa şifre yenileme talimatı gönderildi. Supabase yönlendirme izinlerinin tanımlı olması gerekir.')});
- $$('lpLogout').onclick=()=>run(async()=>{const {error}=await client.auth.signOut();if(error)throw error;user=null;render();msg('Çıkış yapıldı.')});
- client.auth.onAuthStateChange((_event,session)=>{user=session?.user||null;render()});
- client.auth.getUser().then(({data,error})=>{user=error?null:data.user;render();if(!error&&user)msg('Oturum doğrulandı. Bulut yedekleme ve geri alma kullanıma hazır.')}).catch(e=>msg('Oturum doğrulanamadı: '+e.message));
- render();
+const $=id=>document.getElementById(id);
+const gate=$('lpaAuthGate');
+const main=document.querySelector('main');
+if(!gate||!main)return;
+const config=window.LPA_CLOUD_CONFIG;
+let client=null,currentUser=null,recovery=false,busy=false,tab='login';
+const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const account=document.createElement('section');account.id='cloud';account.hidden=true;
+account.innerHTML='<div class="lpa-account-wrap"><h1>Hesabım</h1><p class="muted">Profil bilgilerinizi düzenleyin veya şifrenizi değiştirin.</p><div class="lpa-account-form"><h3>Profil Bilgilerim</h3><p class="muted" id="lpAccountMail"></p><label>Ad Soyad<input id="lpAccountName" maxlength="100" autocomplete="name"></label><label>Büro Adı<input id="lpAccountOffice" maxlength="160"></label><button class="lpa-auth-primary" id="lpSaveProfile">Profili Kaydet</button></div><div class="lpa-account-form"><h3>Şifre Değiştir</h3><label>Yeni Şifre<input id="lpNewPassword" type="password" minlength="10" autocomplete="new-password" placeholder="En az 10 karakter"></label><label>Yeni Şifre (Tekrar)<input id="lpConfirmPassword" type="password" minlength="10" autocomplete="new-password"></label><button class="lpa-auth-primary" id="lpChangePassword">Şifreyi Değiştir</button></div><button class="btn sub" id="lpLogOut">Çıkış Yap</button><p class="muted" id="lpAccountStatus" role="status" aria-live="polite"></p><p class="muted" style="font-size:12px">Uygulamadaki dosya ve evrak ekranları hâlâ demo niteliğindedir. Bu cihazın yerel kayıtları otomatik olarak hesaba aktarılmaz; gerçek müvekkil bilgisi kullanmayın.</p></div>';
+const print=$('printArea');if(print)main.insertBefore(account,print);else main.append(account);
+const nav=document.querySelector('aside nav');if(nav){const b=document.createElement('button');b.dataset.page='cloud';b.textContent='👤 Hesabım';nav.insertBefore(b,nav.querySelector('[data-page="settings"]')||null);b.onclick=()=>{if(currentUser&&typeof go==='function')go('cloud')}}
+function status(message){const t=$('lpAccountStatus');if(t)t.textContent=message}
+function gateMessage(message){const el=$('lpGateMessage');if(el)el.textContent=message}
+function renderGate(){
+gate.innerHTML='<div class="lpa-auth-card"><div style="font-size:13px;letter-spacing:.12em;color:#8cbbff;font-weight:750">⚖ HUKUK BÜROSU YÖNETİMİ</div><h1>LawPlanAsist</h1><p id="lpGateSubtitle">Hesabınızla giriş yapın veya yeni hesap oluşturun.</p><div class="lpa-auth-tabs"><button type="button" id="lpTabLogin">Giriş Yap</button><button type="button" id="lpTabRegister">Kayıt Ol</button></div><div id="lpGateFields"><label>E-posta<input id="lpGateEmail" type="email" autocomplete="email" required></label><label id="lpGatePasswordLabel">Şifre<input id="lpGatePassword" type="password" autocomplete="current-password" required></label><label id="lpGateConfirmLabel" hidden>Şifre Tekrar<input id="lpGateConfirm" type="password" autocomplete="new-password"></label><label id="lpGateNameLabel" hidden>Ad Soyad<input id="lpGateName" type="text" autocomplete="name" maxlength="100"></label></div><button id="lpGateSubmit" class="lpa-auth-primary" style="width:100%;margin-top:10px">Giriş Yap</button><div style="text-align:center"><button id="lpForgotPassword" type="button" class="lpa-auth-link">Şifremi Unuttum</button></div><p class="lpa-auth-message" id="lpGateMessage" aria-live="polite"></p><p style="font-size:12px">Bu sürüm deneme amaçlıdır; gerçek müvekkil verisi girmeyin.</p></div>';
+$('lpTabLogin').onclick=()=>changeTab('login');$('lpTabRegister').onclick=()=>changeTab('register');
+$('lpForgotPassword').onclick=()=>changeTab('reset');$('lpGateSubmit').onclick=submit;
+$('lpGatePassword').addEventListener('keydown',e=>{if(e.key==='Enter')submit()});
+changeTab(tab);
+}
+function changeTab(next){tab=next;const isRegister=next==='register',reset=next==='reset'||next==='recovery';
+$('lpTabLogin').classList.toggle('active',next==='login');$('lpTabRegister').classList.toggle('active',isRegister);
+$('lpGateNameLabel').hidden=!isRegister;$('lpGateConfirmLabel').hidden=!(isRegister||next==='recovery');
+$('lpGatePasswordLabel').hidden=next==='reset';
+$('lpGatePasswordLabel').firstChild.textContent=next==='recovery'?'Yeni Şifre':'Şifre';
+$('lpGateSubmit').textContent=next==='login'?'Giriş Yap':isRegister?'Kayıt Ol':next==='reset'?'Şifre Sıfırlama Bağlantısı Gönder':'Yeni Şifreyi Kaydet';
+$('lpForgotPassword').hidden=reset;
+$('lpGateSubtitle').textContent=next==='login'?'Kayıtlı hesabınızla giriş yapın.':isRegister?'Yeni bir hesap oluşturun.':next==='reset'?'E-posta adresinize şifre sıfırlama bağlantısı isteyin.':'Yeni şifrenizi belirleyin.';
+gateMessage('');
+}
+async function withLock(callback){if(busy)return;busy=true;const btn=$('lpGateSubmit');if(btn)btn.disabled=true;try{await callback()}catch(e){gateMessage('İşlem başarısız: '+(e?.message||'Bilinmeyen hata'))}finally{busy=false;if(btn)btn.disabled=false}}
+async function submit(){if(!client){gateMessage('Giriş hizmeti yüklenemedi. Sayfayı yenileyin.');return}
+await withLock(async()=>{
+const email=($('lpGateEmail')?.value||'').trim(),password=$('lpGatePassword')?.value||'';
+if(tab==='reset'){if(!email.includes('@'))throw Error('Geçerli e-posta adresinizi yazın.');const {error}=await client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/'});if(error)throw error;gateMessage('E-posta kayıtlıysa şifre sıfırlama bağlantısı gönderilmesi istendi. Gelen kutunuzu ve Spam klasörünü kontrol edin.');return}
+if(tab==='recovery'){if(password.length<10||password!==$('lpGateConfirm').value)throw Error('Yeni şifre en az 10 karakter olmalı ve iki alan eşleşmeli.');const {error}=await client.auth.updateUser({password});if(error)throw error;recovery=false;tab='login';gateMessage('Şifre yenilendi. Giriş yapabilirsiniz.');await client.auth.signOut();renderGate();return}
+if(!email.includes('@')||!password)throw Error('E-posta ve şifreyi girin.');
+if(tab==='register'){
+if(password.length<10)throw Error('Şifre en az 10 karakter olmalıdır.');
+if(password!==$('lpGateConfirm').value)throw Error('Şifreler eşleşmiyor.');
+const name=$('lpGateName').value.trim();if(!name)throw Error('Ad ve soyadınızı girin.');
+const {data,error}=await client.auth.signUp({email,password,options:{emailRedirectTo:location.origin+'/',data:{full_name:name}}});
+if(error)throw error;
+if(!data.session)gateMessage('Kayıt başvurusu alındı. E-posta doğrulaması gerekli olabilir. E-posta ulaşmıyorsa Supabase gönderim (SMTP) yapılandırması kontrol edilmelidir.');
+else gateMessage('Hesap oluşturuldu.');
+return;
+}
+const {error}=await client.auth.signInWithPassword({email,password});if(error)throw error;
+$('lpGatePassword').value='';gateMessage('Giriş yapıldı.');
+});
+}
+function setAuthorized(user){
+currentUser=user;
+document.body.classList.toggle('lpa-authenticated',!!user&&!recovery);
+gate.hidden=!!user&&!recovery;
+if(user&&!recovery){
+$('lpAccountMail').textContent='E-posta: '+(user.email||'');
+$('lpAccountName').value=String(user.user_metadata?.full_name||'');
+$('lpAccountOffice').value=String(user.user_metadata?.office_name||'');
+}
+if(!user){if(typeof go==='function')go('dashboard');gate.hidden=false;}
+}
+async function accountAction(button,operation){const b=$(button);b.disabled=true;status('İşlem yapılıyor…');try{await operation()}catch(e){status('İşlem başarısız: '+(e?.message||e))}finally{b.disabled=false}}
+$('lpSaveProfile').onclick=()=>accountAction('lpSaveProfile',async()=>{const name=$('lpAccountName').value.trim(),office=$('lpAccountOffice').value.trim();if(!name)throw Error('Ad soyad boş bırakılamaz.');const {data,error}=await client.auth.updateUser({data:{full_name:name,office_name:office}});if(error)throw error;currentUser=data.user;status('Profil bilgileri kaydedildi.')});
+$('lpChangePassword').onclick=()=>accountAction('lpChangePassword',async()=>{const pwd=$('lpNewPassword').value,confirmPwd=$('lpConfirmPassword').value;if(pwd.length<10||pwd!==confirmPwd)throw Error('En az 10 karakterli ve eşleşen iki şifre girin.');const {error}=await client.auth.updateUser({password:pwd});if(error)throw error;$('lpNewPassword').value='';$('lpConfirmPassword').value='';status('Şifre değişikliği isteği işlendi. Supabase güvenlik ayarlarına bağlı olarak yeniden doğrulama gerekebilir.')});
+$('lpLogOut').onclick=()=>accountAction('lpLogOut',async()=>{const {error}=await client.auth.signOut();if(error)throw error;setAuthorized(null);renderGate()});
+renderGate();
+if(!config||!window.supabase?.createClient){gateMessage('Kimlik doğrulama kütüphanesi yüklenemedi. İnternet bağlantısını kontrol edin.');return;}
+try{client=window.supabase.createClient(config.url,config.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'lpa_demo_auth_session_v1'}})}catch(e){gateMessage('Giriş sistemi başlatılamadı: '+e.message);return}
+client.auth.onAuthStateChange((event,session)=>{
+if(event==='PASSWORD_RECOVERY'){recovery=true;setAuthorized(null);renderGate();changeTab('recovery');return}
+setAuthorized(session?.user||null);
+});
+client.auth.getUser().then(({data,error})=>setAuthorized(error?null:data.user)).catch(()=>setAuthorized(null));
 })();
