@@ -14,10 +14,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def respond(self, send_body):
         path = urlsplit(self.path).path.rstrip("/") or "/"
-        if path in ("/", "/index.html"):
-            data = (ROOT / "index.html").read_bytes()
+        if path in ("/", "/index.html", "/settings.css", "/settings.js"):
+            file_name = "index.html" if path == "/" else path.lstrip("/")
+            data = (ROOT / file_name).read_bytes()
             self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
+            content_type = "text/css" if path.endswith(".css") else "application/javascript" if path.endswith(".js") else "text/html"
+            self.send_header("Content-Type", content_type + "; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Cache-Control", "no-cache")
