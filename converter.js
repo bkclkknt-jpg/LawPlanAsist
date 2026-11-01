@@ -6,7 +6,7 @@ const $=id=>document.getElementById(id),fileInput=$('cFile'),target=$('cTarget')
 const imageExtensions=new Set(['png','jpg','jpeg','webp','bmp','gif','svg']),textExtensions=new Set(['txt','md','html','htm','csv','json','xml','yaml','yml','log']);
 let file=null,ext='';
 const types={png:'PNG Görsel',jpg:'JPG Görsel',webp:'WebP Görsel',txt:'Düz Metin (TXT)',md:'Markdown (MD)',html:'HTML Belgesi',csv:'CSV Tablosu',json:'JSON Verisi',xml:'XML Verisi',pdf:'PDF (Yazdır)'};
-const safe=s=>String(s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;':'&quot;'}[ch]));
+const safe=s=>String(s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
 const extOf=n=>(n.split('.').pop()||'').toLowerCase();
 const norm=x=>x==='jpeg'?'jpg':x==='htm'?'html':x==='yml'?'yaml':x;
 const isText=x=>textExtensions.has(x),isImage=x=>imageExtensions.has(x);
