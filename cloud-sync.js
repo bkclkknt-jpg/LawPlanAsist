@@ -7,6 +7,16 @@ const main=document.querySelector('main');
 if(!gate||!main)return;
 const config=window.LPA_CLOUD_CONFIG;
 let client=null,currentUser=null,recovery=false,busy=false,tab='login';
+const AUTH_KEY='lpa_demo_auth_session_v1',REMEMBER_KEY='lpa_remember_session_v1';
+let remember=false;
+try {remember=localStorage.getItem(REMEMBER_KEY)==='yes'||(localStorage.getItem(REMEMBER_KEY)===null && !!localStorage.getItem(AUTH_KEY));}catch(e){remember=false;}
+const storage={
+  getItem(key){try{return (remember?localStorage:sessionStorage).getItem(key)}catch(e){return null}},
+  setItem(key,value){try{(remember?localStorage:sessionStorage).setItem(key,value);(remember?sessionStorage:localStorage).removeItem(key)}catch(e){console.warn('Oturum kaydedilemedi',e)}},
+  removeItem(key){try{localStorage.removeItem(key);sessionStorage.removeItem(key)}catch(e){}}
+};
+function saveRememberChoice(value){remember=!!value;try{localStorage.setItem(REMEMBER_KEY,remember?'yes':'no')}catch(e){}}
+
 const PASSWORD_RULES='En az 8 karakter, 1 büyük harf, 1 küçük harf, 1 rakam ve 1 simge (- . , ! gibi).';
 function passwordValid(value){return [...value].length>=8 && /\p{Lu}/u.test(value) && /\p{Ll}/u.test(value) && /\p{Nd}/u.test(value) && /[\p{P}\p{S}]/u.test(value);}
 const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -17,17 +27,18 @@ const nav=document.querySelector('aside nav');if(nav){const b=document.createEle
 function status(message){const t=$('lpAccountStatus');if(t)t.textContent=message}
 function gateMessage(message){const el=$('lpGateMessage');if(el)el.textContent=message}
 function renderGate(){
-gate.innerHTML='<div class="lpa-auth-card"><div style="font-size:13px;letter-spacing:.12em;color:#8cbbff;font-weight:750">⚖ HUKUK BÜROSU YÖNETİMİ</div><h1>LawPlanAsist</h1><p id="lpGateSubtitle">Hesabınızla giriş yapın veya yeni hesap oluşturun.</p><div class="lpa-auth-tabs"><button type="button" id="lpTabLogin">Giriş Yap</button><button type="button" id="lpTabRegister">Kayıt Ol</button></div><div id="lpGateFields"><label id="lpGateNameLabel" hidden>Ad Soyad<input id="lpGateName" type="text" autocomplete="name" maxlength="100"></label><label>E-posta<input id="lpGateEmail" type="email" autocomplete="email" required></label><label id="lpGatePasswordLabel">Şifre<input id="lpGatePassword" type="password" autocomplete="current-password" required></label><label id="lpGateConfirmLabel" hidden>Şifre Tekrar<input id="lpGateConfirm" type="password" minlength="8" autocomplete="new-password"></label><p id="lpGatePasswordRules" class="muted" hidden style="font-size:12px">En az 8 karakter, 1 büyük harf, 1 küçük harf, 1 rakam ve 1 simge (- . , ! gibi).</p></div><button id="lpGateSubmit" class="lpa-auth-primary" style="width:100%;margin-top:10px">Giriş Yap</button><div style="text-align:center"><button id="lpForgotPassword" type="button" class="lpa-auth-link">Şifremi Unuttum</button></div><p class="lpa-auth-message" id="lpGateMessage" aria-live="polite"></p><p style="font-size:12px">Bu sürüm deneme amaçlıdır; gerçek müvekkil verisi girmeyin.</p></div>';
+gate.innerHTML='<div class="lpa-auth-card"><div style="font-size:13px;letter-spacing:.12em;color:#8cbbff;font-weight:750">⚖ HUKUK BÜROSU YÖNETİMİ</div><h1>LawPlanAsist</h1><p id="lpGateSubtitle">Hesabınızla giriş yapın veya yeni hesap oluşturun.</p><div class="lpa-auth-tabs"><button type="button" id="lpTabLogin">Giriş Yap</button><button type="button" id="lpTabRegister">Kayıt Ol</button></div><div id="lpGateFields"><label id="lpGateNameLabel" hidden>Ad Soyad<input id="lpGateName" type="text" autocomplete="name" maxlength="100"></label><label>E-posta<input id="lpGateEmail" type="email" autocomplete="email" required></label><label id="lpGatePasswordLabel">Şifre<input id="lpGatePassword" type="password" autocomplete="current-password" required></label><label id="lpGateConfirmLabel" hidden>Şifre Tekrar<input id="lpGateConfirm" type="password" minlength="8" autocomplete="new-password"></label><p id="lpGatePasswordRules" class="muted" hidden style="font-size:12px">En az 8 karakter, 1 büyük harf, 1 küçük harf, 1 rakam ve 1 simge (- . , ! gibi).</p></div><label id="lpRememberRow" style="display:flex;flex-direction:row;align-items:center;gap:10px;margin:13px 0 4px;cursor:pointer"><input id="lpRemember" type="checkbox" style="width:18px;height:18px;flex:none;accent-color:#a6cfff"><span style="font-size:14px">Beni Hatırla</span></label><button id="lpGateSubmit" class="lpa-auth-primary" style="width:100%;margin-top:10px">Giriş Yap</button><div style="text-align:center"><button id="lpForgotPassword" type="button" class="lpa-auth-link">Şifremi Unuttum</button></div><p class="lpa-auth-message" id="lpGateMessage" aria-live="polite"></p><p style="font-size:12px">Bu sürüm deneme amaçlıdır; gerçek müvekkil verisi girmeyin.</p></div>';
 $('lpTabLogin').onclick=()=>changeTab('login');$('lpTabRegister').onclick=()=>changeTab('register');
 $('lpForgotPassword').onclick=()=>changeTab('reset');$('lpGateSubmit').onclick=submit;
 $('lpGatePassword').addEventListener('keydown',e=>{if(e.key==='Enter')submit()});
+$('lpRemember').checked=remember;
 changeTab(tab);
 }
 function changeTab(next){tab=next;const isRegister=next==='register',reset=next==='reset'||next==='recovery';
 $('lpTabLogin').classList.toggle('active',next==='login');$('lpTabRegister').classList.toggle('active',isRegister);
 $('lpGateNameLabel').hidden=!isRegister;$('lpGateConfirmLabel').hidden=!(isRegister||next==='recovery');
 $('lpGateName').disabled=!isRegister;$('lpGateConfirm').disabled=!(isRegister||next==='recovery');
-$('lpGatePasswordLabel').hidden=next==='reset';$('lpGatePasswordRules').hidden=!(isRegister||next==='recovery');
+$('lpGatePasswordLabel').hidden=next==='reset';$('lpRememberRow').hidden=next!=='login';$('lpGatePasswordRules').hidden=!(isRegister||next==='recovery');
 $('lpGatePasswordLabel').firstChild.textContent=next==='recovery'?'Yeni Şifre':'Şifre';
 $('lpGateSubmit').textContent=next==='login'?'Giriş Yap':isRegister?'Kayıt Ol':next==='reset'?'Şifre Sıfırlama Bağlantısı Gönder':'Yeni Şifreyi Kaydet';
 $('lpForgotPassword').hidden=reset;
@@ -51,7 +62,8 @@ if(!data.session)gateMessage('Kayıt başvurusu alındı. E-posta doğrulaması 
 else gateMessage('Hesap oluşturuldu.');
 return;
 }
-const {error}=await client.auth.signInWithPassword({email,password});if(error)throw error;
+const previousChoice=remember;saveRememberChoice($('lpRemember').checked);
+const {error}=await client.auth.signInWithPassword({email,password});if(error){saveRememberChoice(previousChoice);throw error;}
 $('lpGatePassword').value='';gateMessage('Giriş yapıldı.');
 });
 }
@@ -69,10 +81,10 @@ if(!user){if(typeof go==='function')go('dashboard');gate.hidden=false;}
 async function accountAction(button,operation){const b=$(button);b.disabled=true;status('İşlem yapılıyor…');try{await operation()}catch(e){status('İşlem başarısız: '+(e?.message||e))}finally{b.disabled=false}}
 $('lpSaveProfile').onclick=()=>accountAction('lpSaveProfile',async()=>{const name=$('lpAccountName').value.trim(),office=$('lpAccountOffice').value.trim();if(!name)throw Error('Ad soyad boş bırakılamaz.');const {data,error}=await client.auth.updateUser({data:{full_name:name,office_name:office}});if(error)throw error;currentUser=data.user;status('Profil bilgileri kaydedildi.')});
 $('lpChangePassword').onclick=()=>accountAction('lpChangePassword',async()=>{const pwd=$('lpNewPassword').value,confirmPwd=$('lpConfirmPassword').value;if(!passwordValid(pwd))throw Error(PASSWORD_RULES);if(pwd!==confirmPwd)throw Error('Şifreler eşleşmiyor.');const {error}=await client.auth.updateUser({password:pwd});if(error)throw error;$('lpNewPassword').value='';$('lpConfirmPassword').value='';status('Şifre değişikliği isteği işlendi. Supabase güvenlik ayarlarına bağlı olarak yeniden doğrulama gerekebilir.')});
-$('lpLogOut').onclick=()=>accountAction('lpLogOut',async()=>{const {error}=await client.auth.signOut();if(error)throw error;setAuthorized(null);renderGate()});
+$('lpLogOut').onclick=()=>accountAction('lpLogOut',async()=>{const {error}=await client.auth.signOut();if(error)throw error;storage.removeItem(AUTH_KEY);saveRememberChoice(false);setAuthorized(null);renderGate()});
 renderGate();
 if(!config||!window.supabase?.createClient){gateMessage('Kimlik doğrulama kütüphanesi yüklenemedi. İnternet bağlantısını kontrol edin.');return;}
-try{client=window.supabase.createClient(config.url,config.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'lpa_demo_auth_session_v1'}})}catch(e){gateMessage('Giriş sistemi başlatılamadı: '+e.message);return}
+try{client=window.supabase.createClient(config.url,config.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:AUTH_KEY,storage}})}catch(e){gateMessage('Giriş sistemi başlatılamadı: '+e.message);return}
 client.auth.onAuthStateChange((event,session)=>{
 if(event==='PASSWORD_RECOVERY'){recovery=true;setAuthorized(null);renderGate();changeTab('recovery');return}
 setAuthorized(session?.user||null);
