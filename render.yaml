@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: lawplanasist-ortak-demo
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: echo No third-party packages
+    startCommand: python server.py
+    healthCheckPath: /health
